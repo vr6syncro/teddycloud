@@ -974,19 +974,34 @@ error_t httpSend(HttpConnection *connection,
 {
 #if (NET_RTOS_SUPPORT == ENABLED)
    error_t error;
+   size_t written;
+
+   written = 0;
 
 #if (HTTP_SERVER_TLS_SUPPORT == ENABLED)
    //Check whether a secure connection is being used
    if(connection->tlsContext != NULL)
    {
       //Use TLS to transmit data to the client
-      error = tlsWrite(connection->tlsContext, data, length, NULL, flags);
+      error = tlsWrite(connection->tlsContext, data, length, &written, flags);
    }
    else
 #endif
    {
       //Transmit data to the client
-      error = socketSend(connection->socket, data, length, NULL, flags);
+      error = socketSend(connection->socket, data, length, &written, flags);
+   }
+
+   if(error)
+   {
+      TRACE_ERROR("httpSend failed secure=%d requested=%" PRIuSIZE " written=%" PRIuSIZE " flags=%u error=%s\r\n",
+         (connection->tlsContext != NULL), length, written, flags, error2text(error));
+   }
+   else if(written != length)
+   {
+      TRACE_ERROR("httpSend short write secure=%d requested=%" PRIuSIZE " written=%" PRIuSIZE " flags=%u\r\n",
+         (connection->tlsContext != NULL), length, written, flags);
+      error = ERROR_WRITE_FAILED;
    }
    
    pcaplog_ctx_t ctx;

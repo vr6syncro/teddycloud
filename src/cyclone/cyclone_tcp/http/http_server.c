@@ -885,8 +885,11 @@ error_t httpWriteStream(HttpConnection *connection,
       // Send user data
       error = httpSend(connection, data, length, HTTP_FLAG_DELAY);
 
-      // Decrement the count of remaining bytes to be transferred
-      connection->response.byteCount -= length;
+      // Decrement the count of remaining bytes only after a successful write
+      if(!error)
+      {
+         connection->response.byteCount -= length;
+      }
    }
 
    // Return status code
@@ -953,6 +956,7 @@ error_t httpSendResponseStreamUnsafe(HttpConnection *connection, const char_t *u
    size_t n;
    uint32_t file_length;
    uint32_t length;
+   uint32_t transfer_offset;
    FsFile *file;
 
 #if (HTTP_SERVER_GZIP_TYPE_SUPPORT == ENABLED)
@@ -1114,6 +1118,7 @@ error_t httpSendResponseStreamUnsafe(HttpConnection *connection, const char_t *u
    connection->response.contentType = mimeGetType(uri);
    connection->response.chunkedEncoding = FALSE;
    length = connection->response.contentLength;
+   transfer_offset = connection->request.Range.start;
 
    // Send the header to the client
    error = httpWriteHeader(connection);
@@ -1133,10 +1138,12 @@ error_t httpSendResponseStreamUnsafe(HttpConnection *connection, const char_t *u
       if (connection->request.Range.start > 0)
       {
          connection->request.Range.start += TONIE_HEADER_LENGTH;
+         transfer_offset = connection->request.Range.start;
       }
       else
       {
          fsSeekFile(file, TONIE_HEADER_LENGTH, FS_SEEK_SET);
+         transfer_offset = TONIE_HEADER_LENGTH;
       }
    }
    if (connection->request.Range.start > 0 && connection->request.Range.start < connection->request.Range.size)
@@ -1148,6 +1155,15 @@ error_t httpSendResponseStreamUnsafe(HttpConnection *connection, const char_t *u
    {
       TRACE_DEBUG("No seeking, sending from beginning\r\n");
    }
+
+   TRACE_INFO("Streaming response path=%s status=%u contentLength=%" PRIuSIZE " rangeStart=%" PRIu32 " rangeEnd=%" PRIu32 " fileSize=%" PRIu32 " transferOffset=%" PRIu32 "\r\n",
+      absolutePath,
+      connection->response.statusCode,
+      connection->response.contentLength,
+      connection->request.Range.start,
+      connection->request.Range.end,
+      file_length,
+      transfer_offset);
 
 #if (HTTP_SERVER_FS_SUPPORT == ENABLED)
    // Send response body
@@ -1168,16 +1184,25 @@ error_t httpSendResponseStreamUnsafe(HttpConnection *connection, const char_t *u
          continue;
       }
       if (error)
+      {
+         TRACE_ERROR("Failed to read response data at offset=%" PRIu32 " requested=%" PRIuSIZE " remaining=%" PRIu32 " error=%s\r\n",
+            transfer_offset, n, length, error2text(error));
          break;
+      }
 
       // Send data to the client
       error = httpWriteStream(connection, connection->buffer, n);
       // Any error to report?
       if (error)
+      {
+         TRACE_ERROR("Failed to write response data at offset=%" PRIu32 " chunk=%" PRIuSIZE " remaining=%" PRIu32 " error=%s\r\n",
+            transfer_offset, n, length, error2text(error));
          break;
+      }
 
       // Decrement the count of remaining bytes to be transferred
       length -= n;
+      transfer_offset += n;
    }
 
    // Close the file

@@ -440,7 +440,9 @@ error_t handleCloudContent(HttpConnection *connection, const char_t *uri, const 
 
     if (connection->request.Range.start != 0)
     {
-        TRACE_INFO(" >> client requested partial download\r\n");
+        TRACE_INFO(" >> client requested partial download start=%" PRIu32 " end=%" PRIu32 "\r\n",
+                   connection->request.Range.start,
+                   connection->request.Range.end);
     }
 
     char current_time[64];
