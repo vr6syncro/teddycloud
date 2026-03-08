@@ -1156,7 +1156,7 @@ error_t httpSendResponseStreamUnsafe(HttpConnection *connection, const char_t *u
       TRACE_DEBUG("No seeking, sending from beginning\r\n");
    }
 
-   TRACE_INFO("Streaming response path=%s status=%u contentLength=%" PRIuSIZE " rangeStart=%" PRIu32 " rangeEnd=%" PRIu32 " fileSize=%" PRIu32 " transferOffset=%" PRIu32 "\r\n",
+   TRACE_WARNING("Streaming response path=%s status=%u contentLength=%" PRIuSIZE " rangeStart=%" PRIu32 " rangeEnd=%" PRIu32 " fileSize=%" PRIu32 " transferOffset=%" PRIu32 "\r\n",
       absolutePath,
       connection->response.statusCode,
       connection->response.contentLength,
@@ -1169,11 +1169,19 @@ error_t httpSendResponseStreamUnsafe(HttpConnection *connection, const char_t *u
    // Send response body
    while (length > 0)
    {
+      size_t requested;
+
       // Limit the number of bytes to read at a time
-      n = MIN(length, HTTP_SERVER_BUFFER_SIZE);
+      requested = MIN(length, HTTP_SERVER_BUFFER_SIZE);
+      n = requested;
 
       // Read data from the specified file
       error = fsReadFile(file, connection->buffer, n, &n);
+      if (length <= (HTTP_SERVER_BUFFER_SIZE * 2) || n != requested || error)
+      {
+         TRACE_WARNING("Read response chunk offset=%" PRIu32 " requested=%" PRIuSIZE " got=%" PRIuSIZE " remaining=%" PRIu32 " error=%s\r\n",
+            transfer_offset, requested, n, length, error2text(error));
+      }
       // End of input stream?
       if (isStream && error == ERROR_END_OF_FILE && connection->private.client_ctx.state->box.stream_ctx.active)
       {
@@ -1199,6 +1207,11 @@ error_t httpSendResponseStreamUnsafe(HttpConnection *connection, const char_t *u
             transfer_offset, n, length, error2text(error));
          break;
       }
+      else if (length <= (HTTP_SERVER_BUFFER_SIZE * 2) || n != requested)
+      {
+         TRACE_WARNING("Wrote response chunk offset=%" PRIu32 " chunk=%" PRIuSIZE " remaining=%" PRIu32 " responseByteCount=%" PRIuSIZE "\r\n",
+            transfer_offset, n, length, connection->response.byteCount);
+      }
 
       // Decrement the count of remaining bytes to be transferred
       length -= n;
@@ -1215,7 +1228,14 @@ error_t httpSendResponseStreamUnsafe(HttpConnection *connection, const char_t *u
       {
          // Properly close the output stream
          error = httpCloseStream(connection);
+         TRACE_WARNING("Completed response path=%s finalOffset=%" PRIu32 " byteCount=%" PRIuSIZE " closeError=%s\r\n",
+            absolutePath, transfer_offset, connection->response.byteCount, error2text(error));
       }
+   }
+   else
+   {
+      TRACE_ERROR("Aborted response path=%s remaining=%" PRIu32 " offset=%" PRIu32 " byteCount=%" PRIuSIZE " error=%s\r\n",
+         absolutePath, length, transfer_offset, connection->response.byteCount, error2text(error));
    }
 #else
    // Send response body
@@ -1229,6 +1249,7 @@ error_t httpSendResponseStreamUnsafe(HttpConnection *connection, const char_t *u
 #endif
 
    // Return status code
+   TRACE_WARNING("Response finished path=%s error=%s\r\n", absolutePath, error2text(error));
    return error;
 }
 

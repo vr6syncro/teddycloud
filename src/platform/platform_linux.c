@@ -208,6 +208,11 @@ error_t socketSend(Socket *socket, const void *data, size_t length,
     int_t n;
     error_t error;
 
+    if (written)
+    {
+        *written = 0;
+    }
+
     /* this is meant as a flush. not needed/possible? */
     if (!length)
     {
@@ -225,11 +230,18 @@ error_t socketSend(Socket *socket, const void *data, size_t length,
         {
             *written = n;
         }
+        if ((size_t)n != length || length < 32768)
+        {
+            TRACE_WARNING("socketSend len=%" PRIuSIZE " wrote=%d flags=%u errno=%d\r\n",
+                          length, n, flags, errno);
+        }
         // Successful write operation
         error = NO_ERROR;
     }
     else
     {
+        TRACE_ERROR("socketSend failed len=%" PRIuSIZE " wrote=%d flags=%u errno=%d\r\n",
+                    length, n, flags, errno);
         // Timeout error?
         if (errno == EAGAIN || errno == EWOULDBLOCK)
         {

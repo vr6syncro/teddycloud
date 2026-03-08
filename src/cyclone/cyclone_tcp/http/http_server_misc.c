@@ -1003,6 +1003,11 @@ error_t httpSend(HttpConnection *connection,
          (connection->tlsContext != NULL), length, written, flags);
       error = ERROR_WRITE_FAILED;
    }
+   else if(length != HTTP_SERVER_BUFFER_SIZE || flags == HTTP_FLAG_NO_DELAY)
+   {
+      TRACE_WARNING("httpSend tail secure=%d requested=%" PRIuSIZE " written=%" PRIuSIZE " flags=%u\r\n",
+         (connection->tlsContext != NULL), length, written, flags);
+   }
    
    pcaplog_ctx_t ctx;
    ctx.local_endpoint.ipv4 = connection->settings->ipAddr.ipv4Addr;
@@ -1010,7 +1015,7 @@ error_t httpSend(HttpConnection *connection,
    ctx.remote_endpoint.ipv4 = connection->socket->remoteIpAddr.ipv4Addr;
    ctx.remote_endpoint.port = connection->socket->remotePort;
    ctx.pcap_data = &connection->private.pcap_data;
-   pcaplog_write(&ctx, true, (const uint8_t *)data, length);
+   pcaplog_write(&ctx, true, (const uint8_t *)data, written);
 
    //Return status code
    return error;
