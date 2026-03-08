@@ -47,13 +47,14 @@ jobs:
     with:
       system: "ubuntu"
       dockerfile: "DockerfileUbuntu"
-      platforms: '["linux/amd64", "linux/arm/v7", "linux/arm64/v8", "linux/ppc64le", "linux/s390x"]'
+      platforms: ${{ (startsWith(github.ref, 'refs/heads/debug-') || startsWith(github.head_ref, 'debug-')) && '["linux/amd64"]' || '["linux/amd64", "linux/arm/v7", "linux/arm64/v8", "linux/ppc64le", "linux/s390x"]' }}
       primary_image: true
-      error_platforms: '["linux/s390x"]'
-      noasan_fallback_platforms: '["linux/arm/v7", "linux/arm64/v8", "linux/ppc64le"]'
+      error_platforms: ${{ (startsWith(github.ref, 'refs/heads/debug-') || startsWith(github.head_ref, 'debug-')) && '[]' || '["linux/s390x"]' }}
+      noasan_fallback_platforms: ${{ (startsWith(github.ref, 'refs/heads/debug-') || startsWith(github.head_ref, 'debug-')) && '[]' || '["linux/arm/v7", "linux/arm64/v8", "linux/ppc64le"]' }}
       tcw_commit_hash: ${{ inputs.tcw_commit_hash }}
   debian:
     needs: test_commit_hash
+    if: ${{ !(startsWith(github.ref, 'refs/heads/debug-') || startsWith(github.head_ref, 'debug-')) }}
     uses: ./.github/workflows/publish_docker_matrix_base.yml
     with:
       system: "debian"
@@ -65,6 +66,7 @@ jobs:
       tcw_commit_hash: ${{ inputs.tcw_commit_hash }}
   alpine:
     needs: test_commit_hash
+    if: ${{ !(startsWith(github.ref, 'refs/heads/debug-') || startsWith(github.head_ref, 'debug-')) }}
     uses: ./.github/workflows/publish_docker_matrix_base.yml
     with:
       system: "alpine"
@@ -77,6 +79,7 @@ jobs:
 
   ubuntuAsanTest:
     needs: test_commit_hash
+    if: ${{ !(startsWith(github.ref, 'refs/heads/debug-') || startsWith(github.head_ref, 'debug-')) }}
     uses: ./.github/workflows/publish_docker_matrix_base.yml
     with:
       system: "ubuntuAsanTest"
@@ -89,6 +92,7 @@ jobs:
       tcw_commit_hash: ${{ inputs.tcw_commit_hash }}
   debianAsanTest:
     needs: test_commit_hash
+    if: ${{ !(startsWith(github.ref, 'refs/heads/debug-') || startsWith(github.head_ref, 'debug-')) }}
     uses: ./.github/workflows/publish_docker_matrix_base.yml
     with:
       system: "debianAsanTest"
